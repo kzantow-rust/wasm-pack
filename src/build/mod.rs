@@ -1,14 +1,14 @@
 //! Building a Rust crate into a `.wasm` binary.
 
-use child;
-use command::build::BuildProfile;
-use emoji;
-use failure::{Error, ResultExt};
-use manifest::Crate;
+use crate::child;
+use crate::command::build::BuildProfile;
+use crate::emoji;
+use crate::manifest::Crate;
+use crate::PBAR;
+use anyhow::{anyhow, bail, Context, Result};
 use std::path::Path;
 use std::process::Command;
 use std::str;
-use PBAR;
 
 pub mod wasm_target;
 
@@ -23,7 +23,7 @@ pub struct WasmPackVersion {
 }
 
 /// Ensure that `rustc` is present and that it is >= 1.30.0
-pub fn check_rustc_version() -> Result<String, Error> {
+pub fn check_rustc_version() -> Result<String> {
     let local_minor_version = rustc_minor_version();
     match local_minor_version {
         Some(mv) => {
@@ -60,7 +60,7 @@ fn rustc_minor_version() -> Option<u32> {
 }
 
 /// Checks and returns local and latest versions of wasm-pack
-pub fn check_wasm_pack_versions() -> Result<WasmPackVersion, Error> {
+pub fn check_wasm_pack_versions() -> Result<WasmPackVersion> {
     match wasm_pack_local_version() {
         Some(local) => Ok(WasmPackVersion {local, latest: Crate::return_wasm_pack_latest_version()?.unwrap_or_else(|| "".to_string())}),
         None => bail!("We can't figure out what your wasm-pack version is, make sure the installation path is correct.")
@@ -77,7 +77,7 @@ pub fn cargo_build_wasm(
     path: &Path,
     profile: BuildProfile,
     extra_options: &[String],
-) -> Result<(), Error> {
+) -> Result<()> {
     let msg = format!("{}Compiling to Wasm...", emoji::CYCLONE);
     PBAR.info(&msg);
 
@@ -104,10 +104,34 @@ pub fn cargo_build_wasm(
             // Plain cargo builds use the dev cargo profile, which includes
             // debug info by default.
         }
+        BuildProfile::Custom(arg) => {
+            cmd.arg("--profile").arg(arg);
+        }
     }
 
     cmd.arg("--target").arg("wasm32-unknown-unknown");
-    cmd.args(extra_options);
+
+    // The `cargo` command is executed inside the directory at `path`, so relative paths set via extra options won't work.
+    // To remedy the situation, all detected paths are converted to absolute paths.
+    let mut handle_path = false;
+    let extra_options_with_absolute_paths = extra_options
+        .iter()
+        .map(|option| -> Result<String> {
+            let value = if handle_path && Path::new(option).is_relative() {
+                std::env::current_dir()?
+                    .join(option)
+                    .to_str()
+                    .ok_or_else(|| anyhow!("path contains non-UTF-8 characters"))?
+                    .to_string()
+            } else {
+                option.to_string()
+            };
+            handle_path = matches!(&**option, "--target-dir" | "--out-dir" | "--manifest-path");
+            Ok(value)
+        })
+        .collect::<Result<Vec<_>>>()?;
+    cmd.args(extra_options_with_absolute_paths);
+
     child::run(cmd, "cargo build").context("Compiling your crate to WebAssembly failed")?;
     Ok(())
 }
@@ -125,11 +149,7 @@ pub fn cargo_build_wasm(
 /// * `path`: Path to the crate directory to build tests.
 /// * `debug`: Whether to build tests in `debug` mode.
 /// * `extra_options`: Additional parameters to pass to `cargo` when building tests.
-pub fn cargo_build_wasm_tests(
-    path: &Path,
-    debug: bool,
-    extra_options: &[String],
-) -> Result<(), Error> {
+pub fn cargo_build_wasm_tests(path: &Path, debug: bool, extra_options: &[String]) -> Result<()> {
     let mut cmd = Command::new("cargo");
 
     cmd.current_dir(path).arg("build").arg("--tests");

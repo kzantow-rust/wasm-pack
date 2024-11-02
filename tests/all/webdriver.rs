@@ -1,5 +1,5 @@
+use crate::utils::fixture;
 use binary_install::Cache;
-use utils::fixture;
 use wasm_pack::test::webdriver;
 
 #[test]
@@ -19,7 +19,9 @@ fn can_install_chromedriver() {
 #[cfg(any(
     all(target_os = "linux", target_arch = "x86"),
     all(target_os = "linux", target_arch = "x86_64"),
+    all(target_os = "linux", target_arch = "aarch64"),
     all(target_os = "macos", target_arch = "x86_64"),
+    all(target_os = "macos", target_arch = "aarch64"),
     all(target_os = "windows", target_arch = "x86"),
     all(target_os = "windows", target_arch = "x86_64")
 ))]

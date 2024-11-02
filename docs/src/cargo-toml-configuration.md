@@ -18,6 +18,10 @@ The available configuration options and their default values are shown below:
 # be set to an array of strings which are explicit arguments to pass to
 # `wasm-opt`. For example `['-Os']` would optimize for size while `['-O4']`
 # would execute very expensive optimizations passes
+#
+# In most cases, the `-O[X]` flag is enough. However, if you require extreme
+# optimizations, see the full list of `wasm-opt` optimization flags
+# https://github.com/WebAssembly/binaryen/blob/version_117/test/lit/help/wasm-opt.test
 wasm-opt = ['-O']
 
 [package.metadata.wasm-pack.profile.dev.wasm-bindgen]
@@ -27,6 +31,10 @@ debug-js-glue = true
 demangle-name-section = true
 # Should we emit the DWARF debug info custom sections?
 dwarf-debug-info = false
+# Should we omit the default import path?
+omit-default-module-path = false
+# Controls whether wasm-bindgen will split linked modules out into their own files. Enabling this is recommended, because it allows lazy-loading the linked modules and setting a stricter Content Security Policy. Only available in wasm-bindgen 0.2.95 and later.
+split-linked-modules = false
 
 [package.metadata.wasm-pack.profile.profiling]
 wasm-opt = ['-O']
@@ -35,6 +43,7 @@ wasm-opt = ['-O']
 debug-js-glue = false
 demangle-name-section = true
 dwarf-debug-info = false
+omit-default-module-path = false
 
 # `wasm-opt` is on by default in for the release profile, but it can be
 # disabled by setting it to `false`
@@ -45,4 +54,5 @@ wasm-opt = false
 debug-js-glue = false
 demangle-name-section = true
 dwarf-debug-info = false
+omit-default-module-path = false
 ```

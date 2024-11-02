@@ -1,25 +1,23 @@
-use super::{get_and_notify, Collector};
+use super::get_and_notify;
+use crate::install::InstallMode;
+use crate::stamps;
+use crate::target;
+use anyhow::{bail, Context, Result};
 use binary_install::Cache;
 use chrono::DateTime;
-use failure::{self, ResultExt};
-use install::InstallMode;
-use stamps;
+use std::collections::HashMap;
 use std::path::PathBuf;
-use target;
 
 // Keep it up to date with each `wasm-pack` release.
 // https://chromedriver.storage.googleapis.com/LATEST_RELEASE
-const DEFAULT_CHROMEDRIVER_VERSION: &str = "96.0.4664.45";
+const DEFAULT_CHROMEDRIVER_VERSION: &str = "114.0.5735.90";
 
 const CHROMEDRIVER_LAST_UPDATED_STAMP: &str = "chromedriver_last_updated";
 const CHROMEDRIVER_VERSION_STAMP: &str = "chromedriver_version";
 
 /// Get the path to an existing `chromedriver`, or install it if no existing
 /// binary is found or if there is a new binary version.
-pub fn get_or_install_chromedriver(
-    cache: &Cache,
-    mode: InstallMode,
-) -> Result<PathBuf, failure::Error> {
+pub fn get_or_install_chromedriver(cache: &Cache, mode: InstallMode) -> Result<PathBuf> {
     if let Ok(path) = which::which("chromedriver") {
         return Ok(path);
     }
@@ -27,14 +25,13 @@ pub fn get_or_install_chromedriver(
 }
 
 /// Download and install a pre-built `chromedriver` binary.
-pub fn install_chromedriver(
-    cache: &Cache,
-    installation_allowed: bool,
-) -> Result<PathBuf, failure::Error> {
+pub fn install_chromedriver(cache: &Cache, installation_allowed: bool) -> Result<PathBuf> {
     let target = if target::LINUX && target::x86_64 {
         "linux64"
     } else if target::MACOS && target::x86_64 {
-        "mac64"
+        "mac-x64"
+    } else if target::MACOS && target::aarch64 {
+        "mac-arm64"
     } else if target::WINDOWS {
         "win32"
     } else {
@@ -99,7 +96,7 @@ fn get_chromedriver_url(target: &str) -> String {
 
 // ------ `get_chromedriver_url` helpers ------
 
-fn save_chromedriver_version(version: String) -> Result<String, failure::Error> {
+fn save_chromedriver_version(version: String) -> Result<String> {
     stamps::save_stamp_value(CHROMEDRIVER_VERSION_STAMP, &version)?;
 
     let current_time = chrono::offset::Local::now().to_rfc3339();
@@ -122,24 +119,45 @@ fn should_load_chromedriver_version_from_stamp(json: &serde_json::Value) -> bool
     }
 }
 
-fn fetch_chromedriver_version() -> Result<String, failure::Error> {
-    let mut handle = curl::easy::Easy2::new(Collector(Vec::new()));
-    handle
-        .url("https://chromedriver.storage.googleapis.com/LATEST_RELEASE")
-        .context("URL to fetch chromedriver's LATEST_RELEASE is invalid")?;
-    handle
-        .perform()
-        .context("fetching of chromedriver's LATEST_RELEASE failed")?;
+/// Channel information from the chromedriver version endpoint.
+#[derive(Deserialize)]
+struct ChannelInfo {
+    version: String,
+}
 
-    let content = handle.get_mut().take_content();
-    let version =
-        String::from_utf8(content).context("chromedriver's LATEST_RELEASE is not valid UTF-8")?;
+/// The response from the chromedriver version endpoint.
+#[derive(Deserialize)]
+struct GoodLatestVersions {
+    channels: HashMap<String, ChannelInfo>,
+}
+
+/// Retrieve the latest version of chromedriver from the json endpoints.
+/// See: <https://github.com/GoogleChromeLabs/chrome-for-testing#json-api-endpoints>
+fn fetch_chromedriver_version() -> Result<String> {
+    let info: GoodLatestVersions = ureq::builder()
+        .try_proxy_from_env(true)
+        .build()
+        .get("https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions.json")
+        .call()
+        .context("fetching of chromedriver's LATEST_RELEASE failed")?
+        .into_json()
+        .context("converting chromedriver version response to GoodLatestVersions failed")?;
+
+    let version = info
+        .channels
+        .get("Stable")
+        .ok_or_else(|| anyhow::anyhow!("no Stable channel found in chromedriver version response"))?
+        .version
+        .clone();
+
+    println!("chromedriver version: {}", version);
+
     Ok(version)
 }
 
 fn assemble_chromedriver_url(chromedriver_version: &str, target: &str) -> String {
     format!(
-        "https://chromedriver.storage.googleapis.com/{version}/chromedriver_{target}.zip",
+        "https://storage.googleapis.com/chrome-for-testing-public/{version}/{target}/chromedriver-{target}.zip",
         version = chromedriver_version,
         target = target,
     )

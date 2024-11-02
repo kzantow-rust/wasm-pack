@@ -1,6 +1,6 @@
 # wasm-pack build
 
-The `wasm-pack build` command creates the files neccessary for JavaScript
+The `wasm-pack build` command creates the files necessary for JavaScript
 interoperability and for publishing a package to npm. This involves compiling
 your code to wasm and generating a pkg folder. This pkg folder will contain the
 wasm binary, a JS wrapper file, your `README`, and a `package.json` file.
@@ -22,7 +22,7 @@ path is given, the `build` command will run in the current directory.
 
 ## Output Directory
 
-By default, `wasm-pack` will generate a directory for it's build output called `pkg`.
+By default, `wasm-pack` will generate a directory for its build output called `pkg`.
 If you'd like to customize this you can use the `--out-dir` flag.
 
 ```
@@ -91,15 +91,17 @@ wasm-pack build --target nodejs
 | `nodejs`  | [Node.js][deploy-nodejs] | Outputs JS that uses CommonJS modules, for use with a `require` statement. `main` key in `package.json`. |
 | `web` | [Native in browser][deploy-web] | Outputs JS that can be natively imported as an ES module in a browser, but the WebAssembly must be manually instantiated and loaded. |
 | `no-modules` | [Native in browser][deploy-web] | Same as `web`, except the JS is included on a page and modifies global state, and doesn't support as many `wasm-bindgen` features as `web` |
+| `deno` | [Deno][deploy-deno] | Outputs JS that can be natively imported as an ES module in deno. |
 
 [deploy]: https://rustwasm.github.io/docs/wasm-bindgen/reference/deployment.html
 [bundlers]: https://rustwasm.github.io/docs/wasm-bindgen/reference/deployment.html#bundlers
 [deploy-nodejs]: https://rustwasm.github.io/docs/wasm-bindgen/reference/deployment.html#nodejs
 [deploy-web]: https://rustwasm.github.io/docs/wasm-bindgen/reference/deployment.html#without-a-bundler
+[deploy-deno]: https://rustwasm.github.io/docs/wasm-bindgen/reference/deployment.html#deno
 
 ## Scope
 
-The init command also accepts an optional `--scope` argument. This will scope
+The `build` command also accepts an optional `--scope` argument. This will scope
 your package name, which is useful if your package name might conflict with
 something in the public registry. For example:
 
@@ -122,7 +124,7 @@ wasm-pack build examples/js-hello-world --mode no-install
 
 | Option        | Description                                                                              |
 |---------------|------------------------------------------------------------------------------------------|
-| `no-install`  | `wasm-pack init` implicitly and create wasm binding  without installing `wasm-bindgen`.  |
+| `no-install`  | `wasm-pack build` implicitly and create wasm binding without installing `wasm-bindgen`.  |
 | `normal`      | do all the stuffs of `no-install` with installed `wasm-bindgen`.                         |
 
 ## Extra options

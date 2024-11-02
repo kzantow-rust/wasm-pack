@@ -38,12 +38,11 @@ jobs:
             rust: stable
 
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ matrix.rust }}
-          override: true
-          target: wasm32-unknown-unknown
+          targets: wasm32-unknown-unknown
 
       - name: Query version number
         id: get_version
@@ -56,10 +55,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update -y
-          sudo apt-get install clang gcc-aarch64-linux-gnu -y
-          echo "TARGET_CC=clang" >> $GITHUB_ENV
-          echo "CFLAGS_aarch64_unknown_linux_musl=--sysroot=/usr/aarch64-linux-gnu" >> $GITHUB_ENV
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/usr/aarch64-linux-gnu/bin/ld" >> $GITHUB_ENV
+          sudo apt-get install clang gcc-aarch64-linux-gnu musl-tools -y
 
       - name: Install p7zip (MacOS)
         if: matrix.os == 'macos-latest'
@@ -68,8 +64,12 @@ jobs:
       - name: Add rustup target
         run: rustup target add ${{ matrix.target }}
 
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+
       - name: Build
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cross build --release --target ${{ matrix.target }}
 
       - name: Set RUSTFLAGS (Windows)
         if: matrix.os == 'windows-latest'
@@ -96,10 +96,11 @@ jobs:
           mv wasm-pack-init.exe ${{ env.RELEASE_DIR }}
 
       - name: Create tarball
+        shell: bash
         run: 7z a -ttar -so -an ./${{ env.RELEASE_DIR }}/${{ env.RELEASE_BIN }}-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }} | 7z a -si ./${{ env.RELEASE_DIR }}/${{ env.RELEASE_BIN }}-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }}.tar.gz
 
       - name: Upload Zip
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
           path: ./${{ env.RELEASE_DIR }}
@@ -126,22 +127,22 @@ jobs:
           release_name: ${{ steps.get_version.outputs.VERSION }}
 
       - name: Download Linux amd64 tarball
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4.1.7
         with:
           name: ${{ env.LINUX_AMD64_TARGET }}
 
       - name: Download Linux arm64 tarball
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4.1.7
         with:
           name: ${{ env.LINUX_ARM64_TARGET }}
 
       - name: Download Windows tarball
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4.1.7
         with:
           name: ${{ env.WINDOWS_TARGET }}
 
       - name: Download MacOS tarball
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4.1.7
         with:
           name: ${{ env.MACOS_TARGET }}
 

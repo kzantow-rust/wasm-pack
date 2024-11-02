@@ -19,17 +19,17 @@
 use std::env;
 use std::fs;
 use std::io;
+use std::io::IsTerminal;
 use std::path::Path;
 use std::process;
 
-use atty;
-use failure::{self, ResultExt};
+use anyhow::{anyhow, bail, Context, Result};
 use which;
 
 pub fn install() -> ! {
     if let Err(e) = do_install() {
         eprintln!("{}", e);
-        for cause in e.iter_causes() {
+        for cause in e.chain() {
             eprintln!("Caused by: {}", cause);
         }
     }
@@ -47,7 +47,7 @@ pub fn install() -> ! {
     process::exit(0);
 }
 
-fn do_install() -> Result<(), failure::Error> {
+fn do_install() -> Result<()> {
     // Find `rustup.exe` in PATH, we'll be using its installation directory as
     // our installation directory.
     let rustup = match which::which("rustup") {
@@ -74,7 +74,7 @@ fn do_install() -> Result<(), failure::Error> {
     // Our relatively simple install step!
     let me = env::current_exe()?;
     fs::copy(&me, &destination)
-        .with_context(|_| format!("failed to copy executable to `{}`", destination.display()))?;
+        .with_context(|| anyhow!("failed to copy executable to `{}`", destination.display()))?;
     println!(
         "info: successfully installed wasm-pack to `{}`",
         destination.display()
@@ -85,15 +85,17 @@ fn do_install() -> Result<(), failure::Error> {
     Ok(())
 }
 
-fn confirm_can_overwrite(dst: &Path) -> Result<(), failure::Error> {
+fn confirm_can_overwrite(dst: &Path) -> Result<()> {
     // If the `-f` argument was passed, we can always overwrite everything.
     if env::args().any(|arg| arg == "-f") {
         return Ok(());
     }
 
+    let stdin = io::stdin();
+
     // If we're not attached to a TTY then we can't get user input, so there's
     // nothing to do except inform the user about the `-f` flag.
-    if !atty::is(atty::Stream::Stdin) {
+    if !stdin.is_terminal() {
         bail!(
             "existing wasm-pack installation found at `{}`, pass `-f` to \
              force installation over this file, otherwise aborting \
@@ -110,9 +112,7 @@ fn confirm_can_overwrite(dst: &Path) -> Result<(), failure::Error> {
     );
     eprint!("info: would you like to overwrite this file? [y/N]: ");
     let mut line = String::new();
-    io::stdin()
-        .read_line(&mut line)
-        .with_context(|_| "failed to read stdin")?;
+    stdin.read_line(&mut line).context("failed to read stdin")?;
 
     if line.starts_with('y') || line.starts_with('Y') {
         return Ok(());
